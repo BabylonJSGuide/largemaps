@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>load blocks</title>
+
+	<script src="babylon.max.js"></script>
+	
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+if (BABYLON.Engine.isSupported()) {
+    var canvas = document.getElementById("renderCanvas");
+    var engine = new BABYLON.Engine(canvas, true);
+
+	
+
+var createScene = function() {
+	var scene = new BABYLON.Scene(engine);
+ 
+	var camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 5, 0), scene);
+	camera.attachControl(canvas, true);
+	
+	// Let's remove default keyboard:
+    camera.inputs.removeByType("FreeCameraKeyboardMoveInput");
+
+    // Create our own manager:
+    var FreeCameraKeyboardRotateInput = function () {
+            this._keys = [];
+            this.keysLeft = [37];
+            this.keysRight = [39];
+			this.keysUp = [38];
+            this.keysDown = [40];
+            this.rotationSensibility = 0.0025;
+			this.moveSensibility = 0.1;
+			this.direction = new BABYLON.Vector3(0, 0, 1);
+    }
+
+    // Hooking keyboard events
+    FreeCameraKeyboardRotateInput.prototype.attachControl = function (element, noPreventDefault) {
+        var _this = this;
+        if (!this._onKeyDown) {
+            element.tabIndex = 1;
+            this._onKeyDown = function (evt) {			
+                if (_this.keysLeft.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysRight.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysUp.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysDown.indexOf(evt.keyCode) !== -1) {
+                    var index = _this._keys.indexOf(evt.keyCode);
+                    if (index === -1) {
+                        _this._keys.push(evt.keyCode);
+                    }
+                    if (!noPreventDefault) {
+                        evt.preventDefault();
+                    }
+                }
+            };
+            this._onKeyUp = function (evt) {
+                if (_this.keysLeft.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysRight.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysUp.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysDown.indexOf(evt.keyCode) !== -1) {
+                    var index = _this._keys.indexOf(evt.keyCode);
+                    if (index >= 0) {
+                        _this._keys.splice(index, 1);
+                    }
+                    if (!noPreventDefault) {
+                        evt.preventDefault();
+                    }
+                }
+            };
+
+            element.addEventListener("keydown", this._onKeyDown, false);
+            element.addEventListener("keyup", this._onKeyUp, false);
+            BABYLON.Tools.RegisterTopRootEvents([
+                { name: "blur", handler: this._onLostFocus }
+            ]);
+        }
+    };
+
+    // Unhook
+    FreeCameraKeyboardRotateInput.prototype.detachControl = function (element) {
+        if (this._onKeyDown) {
+            element.removeEventListener("keydown", this._onKeyDown);
+            element.removeEventListener("keyup", this._onKeyUp);
+            BABYLON.Tools.UnregisterTopRootEvents([
+                { name: "blur", handler: this._onLostFocus }
+            ]);
+            this._keys = [];
+            this._onKeyDown = null;
+            this._onKeyUp = null;
+        }
+    };
+
+	var switching = false;
+	var topSwitch = false;
+	var bottomSwitch = false;
+	var rightSwitch = false;
+	var leftSwitch = false;
+	
+    // This function is called by the system on every frame
+    FreeCameraKeyboardRotateInput.prototype.checkInputs = function () {
+        if (this._onKeyDown && !switching) {
+            var camera = this.camera;
+            // Keyboard
+            for (var index = 0; index < this._keys.length; index++) {
+                var keyCode = this._keys[index];				
+                if (this.keysLeft.indexOf(keyCode) !== -1) {
+                    camera.cameraRotation.y -= this.rotationSensibility;
+					this.direction = camera.getDirection(new BABYLON.Vector3(0, 0, 1));				
+                }
+                else if (this.keysRight.indexOf(keyCode) !== -1) {
+                    camera.cameraRotation.y += this.rotationSensibility;
+					this.direction = camera.getDirection(new BABYLON.Vector3(0, 0, 1));				
+                }
+				if (this.keysUp.indexOf(keyCode) !== -1) {			
+                    camera.position.addInPlace(this.direction.scale(this.moveSensibility));
+					if(camera.position.z > zBlockSize / 2) {
+						topSwitch = true;
+					}
+					else if(camera.position.z < -zBlockSize / 2) {
+						bottomSwitch = true;
+					}
+					if(camera.position.x > xBlockSize / 2) {
+						rightSwitch = true;
+					}
+					else if(camera.position.x < -xBlockSize / 2) {
+						leftSwitch = true;
+					
+					}
+					switching = topSwitch || bottomSwitch || rightSwitch || leftSwitch;
+					if(switching) {
+						switchBlocks();
+					}
+                }
+                else if (this.keysDown.indexOf(keyCode) !== -1) {
+                    camera.position.subtractInPlace(this.direction.scale(this.moveSensibility));
+					if(camera.position.z > zBlockSize / 2) {
+						topSwitch = true;
+					}
+					else if(camera.position.z < -zBlockSize / 2) {
+						bottomSwitch = true;
+					}
+					if(camera.position.x > xBlockSize / 2) {
+						rightSwitch = true;
+					}
+					else if(camera.position.x < -xBlockSize / 2) {
+						leftSwitch = true;
+					
+					}
+					switching = topSwitch || bottomSwitch || rightSwitch || leftSwitch;
+					if(switching) {
+						switchBlocks();
+					}
+                }
+            }
+        }
+    };
+    FreeCameraKeyboardRotateInput.prototype.getTypeName = function () {
+        return "FreeCameraKeyboardRotateInput";
+    };
+    FreeCameraKeyboardRotateInput.prototype._onLostFocus = function (e) {
+        this._keys = [];
+    };
+    FreeCameraKeyboardRotateInput.prototype.getSimpleName = function () {
+        return "keyboardRotate";
+    };
+
+    // Connect to camera:
+    camera.inputs.add(new FreeCameraKeyboardRotateInput());
+	
+	var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(1, 0, 0), scene);
+	light.intensity = 0.75;
+	light.specular = new BABYLON.Color3(0.95, 0.95, 0.81);
+	//var pl = new BABYLON.PointLight("pl", new BABYLON.Vector3(0, 0, 0), scene);
+	//pl.diffuse = new BABYLON.Color3(1, 1, 1);
+	//pl.specular = new BABYLON.Color3(0.1, 0.1, 0.12);
+	//pl.intensity = 0.75;
+  
+	var blockAppend = function(row, col, mapRow, mapCol) {
+		if(row < rowMax) {
+			var nbMeshes = scene.meshes.length;		
+			BABYLON.SceneLoader.Append("", "scene"+(mapRow + row - 1) + (mapCol + col - 1) + ".babylon", scene, function(){	
+				blocks[row + "" + col] = [];			
+				for(m = nbMeshes; m < scene.meshes.length; m++) {
+					blocks[row + "" + col].push(scene.meshes[m]);
+					scene.meshes[m].position = new BABYLON.Vector3((col - 1) * 100, 0, (row - 1) * 100);				
+				}
+				if(col + 1 < colMax) {
+					blockAppend(row, col + 1, mapRow, mapCol);
+				}
+				else {
+					blockAppend(row + 1, 0, mapRow, mapCol);
+				}
+			});
+		}
+	}
+	
+	var switchBlocks = function() {
+		if(topSwitch) {
+			addTopRow();
+		}
+		else if (bottomSwitch) {
+			addBottomRow();
+		}
+		else if(rightSwitch) {
+			addRightCol()
+		}
+		else if(leftSwitch) {
+			addLeftCol()
+		}
+	}
+	
+	var blockAppendRow = function(row, col, mapRow, mapCol, direction) { //direction -1 if camera moving in + z, else +1	
+		var nbMeshes = scene.meshes.length;		
+		BABYLON.SceneLoader.Append("", "scene"+((mapRow + row + 4) % 5) + ((mapCol + col + 4) % 5) + ".babylon", scene, function(){	
+			blocks[row + "" + col] = [];			
+			for(m = nbMeshes; m < scene.meshes.length; m++) {			
+				blocks[row + "" + col].push(scene.meshes[m]);
+				scene.meshes[m].position = new BABYLON.Vector3((col - 1) * 100, 0, (row - 1) * 100);				
+			}
+			if(col + 1 < colMax) {
+				blockAppendRow(row, col + 1, mapRow, mapCol, direction);
+			}
+			else if(rightSwitch) {
+				addRightCol();
+			}
+			else if(leftSwitch) {
+				addLeftCol();
+			}
+			else {
+				switching = false;
+				topSwitch = false;
+				bottomSwitch = false;
+				rightSwitch = false
+				leftSwitch = false;
+				camera.position.z += zBlockSize * direction;
+			}
+		});
+	}
+	
+	var blockAppendCol = function(row, col, mapRow, mapCol, direction) { //direction -1 if camera moving in + x, else +1			
+		var nbMeshes = scene.meshes.length;		
+		BABYLON.SceneLoader.Append("", "scene"+ ((mapRow + row + 4) % 5) + ((mapCol + col + 4) % 5) + ".babylon", scene, function(){	
+			blocks[row + "" + col] = [];			
+			for(m = nbMeshes; m < scene.meshes.length; m++) {			
+				blocks[row + "" + col].push(scene.meshes[m]);
+				scene.meshes[m].position = new BABYLON.Vector3((col - 1) * 100, 0, (row - 1) * 100);				
+			}
+			if(row + 1 < rowMax) {
+				blockAppendCol(row + 1, col, mapRow, mapCol, direction);
+			}
+			else {
+				switching = false;
+				topSwitch = false;
+				bottomSwitch = false;
+				rightSwitch = false
+				leftSwitch = false;
+				camera.position.x += xBlockSize * direction;
+			}
+		});
+	}
+	
+	
+	var addTopRow = function() {
+		for(var col = 0; col < colMax; col++) {
+			for(var m = 0; m < blocks[0 + "" + col].length; m++) {
+				blocks[0 + "" + col][m].dispose();
+			}
+		}
+		for(var row = 0; row < rowMax - 1; row++) {
+			for(var col = 0; col < colMax; col++) {
+				blocks[row + "" + col] = blocks[(row + 1) + "" + col];
+				for(var m = 0; m < blocks[0 + "" + col].length; m++) {
+					blocks[row + "" + col][m].position.z -= zBlockSize;
+				}
+			}
+		}
+		mapRow = (mapRow + 1) % 5;  //wrap in z		
+		blockAppendRow(rowMax - 1, 0, mapRow, mapCol, -1)
+	}
+	
+	var addBottomRow = function() {
+		for(var col = 0; col < colMax; col++) {
+			for(var m = 0; m < blocks[0 + "" + col].length; m++) {
+				blocks[(rowMax - 1) + "" + col][m].dispose();
+			}
+		}
+		for(var row = rowMax - 1; row > 0; row--) {
+			for(var col = 0; col < colMax; col++) {
+				blocks[row + "" + col] = blocks[(row - 1) + "" + col];
+				for(var m = 0; m < blocks[0 + "" + col].length; m++) {
+					blocks[row + "" + col][m].position.z += zBlockSize;
+				}
+			}
+		}
+		mapRow = (mapRow + 4) % 5;  //wrap in z
+		blockAppendRow(0, 0, mapRow, mapCol, 1)
+	}
+	
+	var addRightCol = function() {
+		for(var row = 0; row < rowMax; row++) {
+			for(var m = 0; m < blocks[row + "" + 0].length; m++) {
+				blocks[row + "" + 0][m].dispose();
+			}
+		}
+		for(var col = 0; col < colMax - 1; col++) { 
+			for(var row = 0; row < rowMax; row++) {
+				blocks[row + "" + col] = blocks[row + "" + (col + 1)];
+				for(var m = 0; m < blocks[row + "" + 0].length; m++) {
+					blocks[row + "" + col][m].position.x -= xBlockSize;
+				}
+			}
+		}
+		mapCol = (mapCol + 1) % 5;  //wrap in x		
+		blockAppendCol(0, colMax - 1, mapRow, mapCol, -1)
+	}
+	
+	var addLeftCol = function() {
+		for(var row = 0; row < rowMax; row++) {
+			for(var m = 0; m < blocks[row + "" + 0].length; m++) {
+				blocks[row + "" + (colMax - 1)][m].dispose();
+			}
+		}
+		for(var col = colMax - 1; col > 0; col--) { 
+			for(var row = 0; row < rowMax; row++) {
+				blocks[row + "" + col] = blocks[row + "" + (col - 1)];
+				for(var m = 0; m < blocks[row + "" + 0].length; m++) {
+					blocks[row + "" + col][m].position.x += xBlockSize;
+				}
+			}
+		}
+		mapCol = (mapCol + 4) % 5;  //wrap in x		
+		blockAppendCol(0, 0, mapRow, mapCol, 1)
+	}
+
+	var xBlockSize = 100;
+	var zBlockSize = 100;
+	
+	var mapRow = 2;
+	var mapCol = 2;
+	
+	var rowMax = 3;
+	var colMax = 3;
+	
+	var blocks = {};
+ 
+	blockAppend(0, 0, mapRow, mapCol);
+	
+  
+	return scene;
+};
+
+
+scene = createScene();
+
+
+engine.runRenderLoop(function () {
+  scene.render();
+});
+
+window.addEventListener("resize", function () {
+    engine.resize();
+});
+        }
+    </script>
+</body>
+</html>
