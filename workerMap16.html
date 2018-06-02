@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>load blocks</title>
+
+	<script src="babylon.max.js"></script>
+	
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+if (BABYLON.Engine.isSupported()) {
+    var canvas = document.getElementById("renderCanvas");
+    var engine = new BABYLON.Engine(canvas, true);
+
+	
+
+var createScene = function() {
+	var scene = new BABYLON.Scene(engine);
+ 
+	var camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 5, -10), scene);
+	camera.attachControl(canvas, true);
+	
+	// Let's remove default keyboard:
+    camera.inputs.removeByType("FreeCameraKeyboardMoveInput");
+
+    // Create our own manager:
+    var FreeCameraKeyboardRotateInput = function () {
+            this._keys = [];
+            this.keysLeft = [37];
+            this.keysRight = [39];
+			this.keysUp = [38];
+            this.keysDown = [40];
+            this.rotationSensibility = 0.0025;
+			this.moveSensibility = 0.1;
+			this.direction = new BABYLON.Vector3(0, 0, 1);
+    }
+
+    // Hooking keyboard events
+    FreeCameraKeyboardRotateInput.prototype.attachControl = function (element, noPreventDefault) {
+        var _this = this;
+        if (!this._onKeyDown) {
+            element.tabIndex = 1;
+            this._onKeyDown = function (evt) {			
+                if (_this.keysLeft.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysRight.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysUp.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysDown.indexOf(evt.keyCode) !== -1) {
+                    var index = _this._keys.indexOf(evt.keyCode);
+                    if (index === -1) {
+                        _this._keys.push(evt.keyCode);
+                    }
+                    if (!noPreventDefault) {
+                        evt.preventDefault();
+                    }
+                }
+            };
+            this._onKeyUp = function (evt) {
+                if (_this.keysLeft.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysRight.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysUp.indexOf(evt.keyCode) !== -1 ||
+                    _this.keysDown.indexOf(evt.keyCode) !== -1) {
+                    var index = _this._keys.indexOf(evt.keyCode);
+                    if (index >= 0) {
+                        _this._keys.splice(index, 1);
+                    }
+                    if (!noPreventDefault) {
+                        evt.preventDefault();
+                    }
+                }
+            };
+
+            element.addEventListener("keydown", this._onKeyDown, false);
+            element.addEventListener("keyup", this._onKeyUp, false);
+            BABYLON.Tools.RegisterTopRootEvents([
+                { name: "blur", handler: this._onLostFocus }
+            ]);
+        }
+    };
+
+    // Unhook
+    FreeCameraKeyboardRotateInput.prototype.detachControl = function (element) {
+        if (this._onKeyDown) {
+            element.removeEventListener("keydown", this._onKeyDown);
+            element.removeEventListener("keyup", this._onKeyUp);
+            BABYLON.Tools.UnregisterTopRootEvents([
+                { name: "blur", handler: this._onLostFocus }
+            ]);
+            this._keys = [];
+            this._onKeyDown = null;
+            this._onKeyUp = null;
+        }
+    };
+
+	var switching = false;
+	var topSwitch = false;
+	var bottomSwitch = false;
+	var rightSwitch = false;
+	var leftSwitch = false;
+	
+    // This function is called by the system on every frame
+    FreeCameraKeyboardRotateInput.prototype.checkInputs = function () {
+        if (this._onKeyDown && !switching) {
+            var camera = this.camera;
+            // Keyboard
+            for (var index = 0; index < this._keys.length; index++) {
+                var keyCode = this._keys[index];				
+                if (this.keysLeft.indexOf(keyCode) !== -1) {
+                    camera.cameraRotation.y -= this.rotationSensibility;
+					this.direction = camera.getDirection(new BABYLON.Vector3(0, 0, 1));				
+                }
+                else if (this.keysRight.indexOf(keyCode) !== -1) {
+                    camera.cameraRotation.y += this.rotationSensibility;
+					this.direction = camera.getDirection(new BABYLON.Vector3(0, 0, 1));				
+                }
+				if (this.keysUp.indexOf(keyCode) !== -1) {			
+                    camera.position.addInPlace(this.direction.scale(this.moveSensibility));				
+					if(camera.position.z > zBlockSize / 2) {
+						topSwitch = true;
+					}
+					else if(camera.position.z < -zBlockSize / 2) {
+						bottomSwitch = true;
+					}
+					if(camera.position.x > xBlockSize / 2) {
+						rightSwitch = true;
+					}
+					else if(camera.position.x < -xBlockSize / 2) {
+						leftSwitch = true;
+					
+					}
+					switching = topSwitch || bottomSwitch || rightSwitch || leftSwitch;
+					if(switching) {
+						switchBlocks();
+					}
+                }
+                else if (this.keysDown.indexOf(keyCode) !== -1) {
+                    camera.position.subtractInPlace(this.direction.scale(this.moveSensibility));
+					if(camera.position.z > zBlockSize / 2) {
+						topSwitch = true;
+					}
+					else if(camera.position.z < -zBlockSize / 2) {
+						bottomSwitch = true;
+					}
+					if(camera.position.x > xBlockSize / 2) {
+						rightSwitch = true;
+					}
+					else if(camera.position.x < -xBlockSize / 2) {
+						leftSwitch = true;
+					
+					}
+					switching = topSwitch || bottomSwitch || rightSwitch || leftSwitch;
+					if(switching) {
+						switchBlocks();
+					}
+                }
+            }
+        }
+    };
+    FreeCameraKeyboardRotateInput.prototype.getTypeName = function () {
+        return "FreeCameraKeyboardRotateInput";
+    };
+    FreeCameraKeyboardRotateInput.prototype._onLostFocus = function (e) {
+        this._keys = [];
+    };
+    FreeCameraKeyboardRotateInput.prototype.getSimpleName = function () {
+        return "keyboardRotate";
+    };
+
+    // Connect to camera:
+    camera.inputs.add(new FreeCameraKeyboardRotateInput());
+	
+	var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(1, 0, 0), scene);
+	light.intensity = 0.75;
+	light.specular = new BABYLON.Color3(0.95, 0.95, 0.81);
+	//var pl = new BABYLON.PointLight("pl", new BABYLON.Vector3(0, 0, 0), scene);
+	//pl.diffuse = new BABYLON.Color3(1, 1, 1);
+	//pl.specular = new BABYLON.Color3(0.1, 0.1, 0.12);
+	//pl.intensity = 0.75;
+	
+	
+	var loadWorker = new Worker('loader.js');
+	
+	var loadBlock = function(row, col, mapRow, mapCol, meshStr, shown) {
+		blocks[row + "|" + col] = {};
+		blocks[row + "|" + col].loaded = false;		
+		BABYLON.SceneLoader.ImportMesh("", "", "data:" + meshStr, scene, function(meshes){		
+			blocks[row + "|" + col].meshes = meshes;
+			blocks[row + "|" + col].loaded = true;
+			blocks[row + "|" + col].mapRow = (nbRows + row + mapRow) % nbRows;
+			blocks[row + "|" + col].mapCol = (nbCols + col + mapCol) % nbCols;
+			for(m = 0; m < meshes.length; m++) {			
+				meshes[m].position = new BABYLON.Vector3((col - centreRow) * xBlockSize, 0, (row - centreCol) * zBlockSize);			
+				meshes[m].setEnabled(shown);
+			}
+		});
+	}
+	
+	var loadOuterRows = function(outerRow, outerCol){
+		for(var row = 0; row < nbEdgeRows; row++) {
+			for(var col = 0; col < nbOuterCols; col++) {		
+				loadWorker.postMessage([row + outerRow, col + outerCol, mapRow, mapCol, nbRows, nbCols]);
+				loadWorker.onmessage = function(e) {
+					loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], true);
+				}
+			}
+		} 
+	};
+	
+	var loadOuterCols = function(outerRow, outerCol){	
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var col = 0; col < nbEdgeCols; col++) {				
+				loadWorker.postMessage([row + outerRow, col + outerCol, mapRow, mapCol, nbRows, nbCols]);
+				loadWorker.onmessage = function(e) {
+					loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], true);
+				}
+			}
+		}
+	};
+	
+	
+	//Load Outer Blocks 
+	var loadOuter = function() {
+		var startRow = nbCoreRows + nbEdgeRows;		
+		loadOuterRows(startRow, 0);
+		loadOuterRows(0, 0);
+		startRow = nbEdgeRows;
+		var startCol = nbCoreCols + nbEdgeCols;		
+		loadOuterCols(startRow, startCol);
+		loadOuterCols(startRow, 0);
+	}
+	
+	//Load Core Blocks
+	var loadCore = function(cornerRow, cornerCol) {
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var col = 0; col < nbCoreCols; col++) {		
+				loadWorker.postMessage([row + cornerRow, col + cornerCol, mapRow, mapCol, nbRows, nbCols]);
+				loadWorker.onmessage = function(e) {
+					loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], true);
+				}
+			}
+		}
+	}
+	
+	var switchBlocks = function() {	
+		if(topSwitch) {			
+			addTopRow();		
+		}
+		else if (bottomSwitch) {	
+			addBottomRow();
+		}
+		else if(rightSwitch) {		
+			addRightCol()
+		}
+		else if(leftSwitch) {		
+			addLeftCol()
+		}
+	}
+	
+	var addTopRow = function() {	
+		//Deals with rows in line with core
+		for(var col = 0; col < nbCoreCols; col++) {			
+			for(var m = 0; m < blocks[(nbCoreRows + nbEdgeRows) + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbCoreRows + nbEdgeRows) + "|" + (col + nbEdgeCols)].meshes[m].setEnabled(true);
+			}
+		}
+		
+		for(var col = 0; col < nbCoreCols; col++) {
+			for(var m = 0; m < blocks[0 + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[0 + "|" + (col + nbEdgeCols)].meshes[m].dispose();		
+			}
+		}
+		
+		
+		for(var row = 0; row < nbOuterRows - 1; row++) {
+			for(var col = 0; col < nbCoreCols; col++) {
+				blocks[row + "|" + (col + nbEdgeCols)] = blocks[(row + 1) + "|" + (col + nbEdgeCols)];
+				for(var m = 0; m < blocks[row + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+					blocks[row + "|" + (col + nbEdgeCols)].meshes[m].position.z -= zBlockSize;
+				}
+			}
+		}
+		switching = false;
+		topSwitch = false;
+		camera.position.z -= zBlockSize;
+		for(var col = 0; col < nbCoreCols; col++) {
+			for(var m = 0; m < blocks[(nbEdgeRows - 1) + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbEdgeRows - 1) + "|" + (col + nbEdgeCols)].meshes[m].setEnabled(false);
+			}
+		}
+		var nextMapRow = mapRow + 1;
+		for(var col = 0; col < nbCoreCols; col++) {		
+			loadWorker.postMessage([nbOuterRows - 1, col + nbEdgeCols, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		//Deals with rows outside of core
+		for(var col = 0; col < nbEdgeCols; col++) {
+			for(var m = 0; m < blocks[0 + "|" + col].meshes.length; m++) {
+				blocks[0 + "|" + col].meshes[m].dispose();
+			}
+			for(var m = 0; m < blocks[0 + "|" + (col + nbCoreCols + nbEdgeCols)].meshes.length; m++) {
+				blocks[0 + "|" + (col + nbCoreCols + nbEdgeCols)].meshes[m].dispose();
+			}
+		}
+		
+		for(var row = 0; row < nbOuterRows - 1; row++) {
+			for(var col = 0; col < nbEdgeCols; col++) {
+				blocks[row + "|" + col] = blocks[(row + 1) + "|" + col];
+				for(var m = 0; m < blocks[row + "|" + col].meshes.length; m++) {
+					blocks[row + "|" + col].meshes[m].position.z -= zBlockSize;
+				}			
+				blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)] = blocks[(row + 1) + "|" + (col + nbCoreCols + nbEdgeCols)];
+				for(var m = 0; m < blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)].meshes.length; m++) {
+					blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)].meshes[m].position.z -= zBlockSize;
+				}
+			}
+		}
+		
+		for(var col = 0; col < nbEdgeCols; col++) {			
+			loadWorker.postMessage([nbOuterRows - 1, col + nbEdgeCols, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+			loadWorker.postMessage([nbOuterRows - 1, col + nbCoreCols, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		mapRow++;
+	}
+	
+	//Add Bottom Row
+	var addBottomRow = function() {		
+		//Deals with rows in line with core	
+		for(var col = 0; col < nbCoreCols; col++) {			
+			for(var m = 0; m < blocks[(nbEdgeRows - 1) + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbEdgeRows - 1) + "|" + (col + nbEdgeCols)].meshes[m].setEnabled(true);
+			}
+		}
+		
+		for(var col = 0; col < nbCoreCols; col++) {
+			for(var m = 0; m < blocks[(nbOuterRows - 1) + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbOuterRows - 1) + "|" + (col + nbEdgeCols)].meshes[m].dispose();
+			}
+		}
+		
+		
+		for(var row = nbOuterRows; row > 0; row--) {
+			for(var col = 0; col < nbCoreCols; col++) {
+				blocks[row + "|" + (col + nbEdgeCols)] = blocks[(row - 1) + "|" + (col + nbEdgeCols)];
+				for(var m = 0; m < blocks[row + "|" + (col + nbEdgeCols)].meshes.length; m++) {				
+					blocks[row + "|" + (col + nbEdgeCols)].meshes[m].position.z += zBlockSize;					
+				}
+			}
+		}
+
+	
+		switching = false;
+		bottomSwitch = false;
+		camera.position.z += zBlockSize;		
+		for(var col = 0; col < nbCoreCols; col++) {
+			for(var m = 0; m < blocks[(nbEdgeRows + nbCoreRows + 1) + "|" + (col + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbEdgeRows + nbCoreRows + 1) + "|" + (col + nbEdgeCols)].meshes[m].setEnabled(false);
+			}
+		}
+		var nextMapRow = mapRow - 1;
+		for(var col = 0; col < nbCoreCols; col++) {		
+			loadWorker.postMessage([0, col + nbEdgeCols, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		//Deals with rows outside of core
+		for(var col = 0; col < nbEdgeCols; col++) {
+			for(var m = 0; m < blocks[(nbOuterRows - 1) + "|" + col].meshes.length; m++) {
+				blocks[(nbOuterRows - 1) + "|" + col].meshes[m].dispose();
+			}
+			for(var m = 0; m < blocks[(nbOuterRows - 1) + "|" + (col + nbCoreCols + nbEdgeCols)].meshes.length; m++) {
+				blocks[(nbOuterRows - 1) + "|" + (col + nbCoreCols + nbEdgeCols)].meshes[m].dispose();
+			}
+		}
+		
+		for(var row = 1; row < nbOuterRows; row++) {
+			for(var col = 0; col < nbEdgeCols; col++) {
+				blocks[row + "|" + col] = blocks[(row - 1) + "|" + col];
+				for(var m = 0; m < blocks[row + "|" + col].meshes.length; m++) {
+					blocks[row + "|" + col].meshes[m].position.z += zBlockSize;
+				}			
+				blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)] = blocks[(row - 1) + "|" + (col + nbCoreCols + nbEdgeCols)];
+				for(var m = 0; m < blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)].meshes.length; m++) {
+					blocks[row + "|" + (col + nbCoreCols + nbEdgeCols)].meshes[m].position.z += zBlockSize;
+				}
+			}
+		}
+		
+		for(var col = 0; col < nbEdgeCols; col++) {			
+			loadWorker.postMessage([0, col, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+			loadWorker.postMessage([0, col + nbCoreCols, nextMapRow, mapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		mapRow--;
+	}
+	
+	//Add Right Column
+	var addRightCol = function() {	
+		//Deals with columns in line with core
+		for(var row = 0; row < nbCoreRows; row++) {			
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (nbCoreCols + nbEdgeCols)].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + (nbCoreCols + nbEdgeCols)].meshes[m].setEnabled(true);
+			}
+		}
+		
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + 0].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + 0].meshes[m].dispose();
+			}
+		}
+		
+		
+		for(var col = 0; col < nbOuterCols - 1; col++) {
+			for(var row = 0; row < nbCoreRows; row++) {
+				blocks[(row + nbEdgeRows) + "|" + col] = blocks[(row + nbEdgeRows) + "|" + (col + 1)];
+				for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (col + 1)].meshes.length; m++) {
+					blocks[(row + nbEdgeRows) + "|" + (col + 1)].meshes[m].position.x -= xBlockSize;
+				}
+			}
+		}
+		switching = false;
+		rightSwitch = false;
+		camera.position.x -= xBlockSize;
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols - 1)].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols - 1)].meshes[m].setEnabled(false);
+			}
+		}
+		var nextMapCol = mapCol + 1;
+		for(var row = 0; row < nbCoreRows; row++) {		
+			loadWorker.postMessage([row + nbEdgeRows, nbOuterCols - 1, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		
+		//Deals with cols outside of core
+		for(var row = 0; row < nbEdgeRows; row++) {
+			for(var m = 0; m < blocks[row + "|" + 0].meshes.length; m++) {
+				blocks[row + "|" + 0].meshes[m].dispose();
+			}
+			for(var m = 0; m < blocks[(row + nbCoreRows + nbEdgeRows) + "|" + 0].meshes.length; m++) {
+				blocks[(row + nbCoreRows + nbEdgeRows) + "|" + 0].meshes[m].dispose();
+			}
+		}
+		
+		for(var col = 0; col < nbOuterCols - 1; col++) {
+			for(var row = 0; row < nbEdgeRows; row++) {
+				blocks[row + "|" + col] = blocks[row + "|" + (col + 1)];
+				for(var m = 0; m < blocks[row + "|" + col].meshes.length; m++) {
+					blocks[row + "|" + col].meshes[m].position.x -= xBlockSize;
+				}			
+				blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col] = blocks[(row + nbCoreRows + nbEdgeRows) + "|" + (col + 1)];
+				for(var m = 0; m < blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col].meshes.length; m++) {
+					blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col].meshes[m].position.x -= xBlockSize;
+				}
+			}
+		}
+		
+		for(var row = 0; row < nbEdgeRows; row++) {			
+			loadWorker.postMessage([row, nbOuterCols - 1, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+			loadWorker.postMessage([row + nbCoreRows + nbEdgeRows, nbOuterCols - 1, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		mapCol++;
+	}
+	
+	//Add Left Column
+	var addLeftCol = function() {		
+		//Deals with columns in line with core		
+		for(var row = 0; row < nbCoreRows; row++) {			
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols - 1)].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols - 1)].meshes[m].setEnabled(true);
+			}
+		}		
+		
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (nbOuterCols - 1)].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + (nbOuterCols - 1)].meshes[m].dispose();
+			}
+		}		
+		
+		for(var col = nbOuterCols; col > 0; col--) {
+			for(var row = 0; row < nbCoreRows; row++) {
+				blocks[(row + nbEdgeRows) + "|" + col] = blocks[(row + nbEdgeRows) + "|" + (col - 1)];				
+				for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + col].meshes.length; m++) {				
+					blocks[(row + nbEdgeRows) + "|" + col].meshes[m].position.x += xBlockSize;					
+				}
+			}
+		}
+
+	
+		switching = false;
+		leftSwitch = false;
+		camera.position.x += xBlockSize;		
+		for(var row = 0; row < nbCoreRows; row++) {
+			for(var m = 0; m < blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols + nbCoreCols + 1)].meshes.length; m++) {
+				blocks[(row + nbEdgeRows) + "|" + (nbEdgeCols + nbCoreCols + 1)].meshes[m].setEnabled(false);
+			}
+		}
+		var nextMapCol = mapCol - 1;
+		for(var row = 0; row < nbCoreRows; row++) {		
+			loadWorker.postMessage([row + nbEdgeRows, 0, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+
+		
+		//Deals with columns outside of core
+		for(var row = 0; row < nbEdgeRows; row++) {
+			for(var m = 0; m < blocks[row + "|" + (nbOuterCols - 1)].meshes.length; m++) {
+				blocks[row + "|" + (nbOuterCols - 1)].meshes[m].dispose();
+			}
+			for(var m = 0; m < blocks[(row + nbCoreRows + nbEdgeRows) + "|" + (nbOuterCols - 1)].meshes.length; m++) {
+				blocks[(row + nbCoreRows + nbEdgeRows) + "|" + (nbOuterCols - 1)].meshes[m].dispose();
+			}
+		}
+		
+		for(var col = 1; col < nbOuterCols; col++) {
+			for(var row = 0; row < nbEdgeRows; row++) {
+				blocks[row + "|" + col] = blocks[row + "|" + (col - 1)];
+				for(var m = 0; m < blocks[row + "|" + col].meshes.length; m++) {
+					blocks[row + "|" + col].meshes[m].position.x += xBlockSize;
+				}			
+				blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col] = blocks[(row + nbCoreRows + nbEdgeRows) + "|" + (col - 1)];
+				for(var m = 0; m < blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col].meshes.length; m++) {
+					blocks[(row + nbCoreRows + nbEdgeRows) + "|" + col].meshes[m].position.x += xBlockSize;
+				}
+			}
+		}
+		
+		for(var row = 0; row < nbEdgeRows; row++) {			
+			loadWorker.postMessage([row, 0, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+			loadWorker.postMessage([row + nbCoreRows + nbEdgeRows, 0, mapRow, nextMapCol, nbRows, nbCols]);
+			loadWorker.onmessage = function(e) {
+				loadBlock(e.data[1], e.data[2], e.data[3], e.data[4], e.data[0], false);
+			}
+		}
+		
+		mapCol--;
+	}
+	
+
+	var xBlockSize = 100;
+	var zBlockSize = 100;
+	
+	var nbRows = 25; //must be odd
+	var nbCols = 25; //must be odd
+	
+	var nbCoreRows = 5; //must be odd
+	var nbCoreCols = 5; //must be odd
+	
+	var nbOuterRows = 7; //must be odd
+	var nbOuterCols = 7; //must be odd
+	
+	var centreRow = Math.floor(nbOuterRows / 2);
+	var centreCol = Math.floor(nbOuterCols / 2);
+	
+	var nbEdgeRows = (nbOuterRows - nbCoreRows) / 2;
+	var nbEdgeCols = (nbOuterCols - nbCoreCols) / 2;
+	
+	var nbFarRows = (nbRows - nbOuterRows) / 2;
+	var nbFarCols = (nbCols - nbOuterCols) / 2;
+
+	
+	var blocks = {};
+	
+	var mapRow = nbFarRows;
+	var mapCol = nbFarCols;
+ 
+	loadCore(nbEdgeRows, nbEdgeCols);
+	loadOuter();
+	
+	return scene;
+};
+
+
+scene = createScene();
+
+
+engine.runRenderLoop(function () {
+  scene.render();
+});
+
+window.addEventListener("resize", function () {
+    engine.resize();
+});
+        }
+    </script>
+</body>
+</html>
