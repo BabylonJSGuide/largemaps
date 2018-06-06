@@ -2,12 +2,10 @@ var onmessage = function(e) {
 	var row = e.data[0];
 	var col = e.data[1];
 	var mapRow = e.data[2];
-	var mapCol = e.data[3];
-	var nbRows = e.data[4];
-	var nbCols = e.data[5];	
-	var url = "block" + ((nbRows + row + mapRow) % nbRows) + "_" + ((nbCols + col + mapCol) % nbCols) + ".babylon";	
-	fetch(url, function(xhr) {
-		postMessage([xhr.responseText, row, col]);
+	var mapCol = e.data[3];	
+	var url = "block" + mapRow + "_" + mapCol + ".babylon";		
+	fetch(url, function(xhr) {		
+		postMessage([xhr.responseText, row, col, mapRow, mapCol]);
 		
 	});
 };
