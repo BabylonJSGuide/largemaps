@@ -332,7 +332,7 @@ var createScene = function() {
 		//Except for bottom row pull row below it into row
 		for(var row = nbCoreRows; row > 0; row--) {
 			for(var col = 0; col < nbCoreCols; col++) {
-				blocks[row + "|" + col] = blocks[(row - 1) + "|" + (col + nbEdgeCols)];
+				blocks[row + "|" + col] = blocks[(row - 1) + "|" + col];
 				for(var m = 0; m < blocks[row + "|" + col].meshes.length; m++) {				
 					blocks[row + "|" + col].meshes[m].position.z += zBlockSize;					
 				}
